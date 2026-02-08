@@ -1,0 +1,77 @@
+---
+- name: WebLogic Patch Stop, Backup, Patch, Start
+  hosts: all
+  remote_user: weblogic
+  gather_facts: yes
+  serial: 1   # safer: one server at a time
+  vars:
+    oracle_home: /oracle/middleware
+    domain_home: /oracle/middleware/user_projects/domains/mydomain
+    backup_dir: /oracle/backup
+    binary_patches_path: /oracle/TEST/Middleware/CPUAPR_2025_14C/WS_SPB_14.1.1.0_240405/binary_patches
+    patch_list_aix: /oracle/TEST/Middleware/CPUAPR_2025_14C/WS_SPB_14.1.1.0_240405/binary_patches/aix64_patchlist.txt
+    patch_list_linux: /oracle/TEST/Middleware/CPUAPR_2025_14C/WS_SPB_14.1.1.0_240405/binary_patches/linux64_patchlist.txt
+    managed_servers:
+      - ms1
+      - ms2
+      - ms3
+
+  tasks:
+
+    # ---------------- STOP SERVERS ----------------
+    - name: Stop Managed Servers
+      shell: |
+        {{ domain_home }}/bin/stopManagedWebLogic.sh {{ item }}
+      loop: "{{ managed_servers }}"
+      ignore_errors: true
+
+    - name: Stop Admin Server (run once)
+      shell: |
+        {{ domain_home }}/bin/stopWebLogic.sh
+      ignore_errors: true
+      run_once: true
+
+    # ---------------- BACKUP ----------------
+    - name: Create backup directory
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Backup Oracle Home
+      archive:
+        path: "{{ oracle_home }}"
+        dest: "{{ backup_dir }}/middleware_{{ inventory_hostname }}_{{ ansible_date_time.date }}.tgz"
+        format: gz
+
+    # ---------------- PATCH ----------------
+    - name: Apply WebLogic patch on AIX
+      shell: |
+        {{ oracle_home }}/OPatch/opatch napply \
+        -oh {{ oracle_home }} \
+        -phBaseFile {{ patch_list_aix }} \
+        -silent
+      args:
+        chdir: "{{ binary_patches_path }}"
+      when: ansible_system == "AIX"
+
+    - name: Apply WebLogic patch on Linux
+      shell: |
+        {{ oracle_home }}/OPatch/opatch napply \
+        -oh {{ oracle_home }} \
+        -phBaseFile {{ patch_list_linux }} \
+        -silent
+      args:
+        chdir: "{{ binary_patches_path }}"
+      when: ansible_system == "Linux"
+
+    # ---------------- START SERVERS ----------------
+    - name: Start Admin Server (run once)
+      shell: |
+        nohup {{ domain_home }}/bin/startWebLogic.sh > admin.out 2>&1 &
+      run_once: true
+
+    - name: Start Managed Servers
+      shell: |
+        nohup {{ domain_home }}/bin/startManagedWebLogic.sh {{ item }} > {{ item }}.out 2>&1 &
+      loop: "{{ managed_servers }}"
