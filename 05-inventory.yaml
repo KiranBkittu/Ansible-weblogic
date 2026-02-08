@@ -1,0 +1,22 @@
+all:
+  vars:
+    ansible_user: weblogic
+
+  children:
+
+    source_server:
+      hosts:
+        aix_server1:
+          ansible_host: ip1
+
+    aix_servers:
+      hosts:
+        aix_server1:
+          ansible_host: ip1
+        aix_server2:
+          ansible_host: ip2
+
+    linux_servers:
+      hosts:
+        linux_server1:
+          ansible_host: ip3
