@@ -1,0 +1,42 @@
+- name: Copy binary from 48 to 49 via control node 44
+  hosts: all
+  remote_user: weblogic
+
+  tasks:
+    - name: copying binaries from source server
+      fetch:
+        src: "{{ item }}"
+        dest: /tmp
+        flat: yes
+      with_items:
+        - /oracle/Softwares/oraInst.loc
+        - /oracle/Softwares/wls.rsp
+        - /oracle/Softwares/fmw_14.1.1.0.0_wls.jar
+      when: inventory_hostname == "aix_server1"   # Copying binaries from source servers
+
+    - name: Copying binary to destination server
+      copy:
+        src: "/tmp/{{ item | basename }}"
+        dest: "/oracle/Softwares/{{ item | basename }}"
+        mode: "0755"
+      with_items:
+        - /oracle/Softwares/oraInst.loc
+        - /oracle/Softwares/wls.rsp
+        - /oracle/Softwares/fmw_14.1.1.0.0_wls.jar
+      when: inventory_hostname == "linux_server1"   # Copying binaries to destination servers
+
+    - name: Installing weblogic in Silent mode on destination server of AIX
+      shell: >
+        /usr/java8_64/bin/java -jar /oracle/Softwares/fmw_14.1.1.0.0_wls.jar
+        -silent
+        -responseFile /oracle/Softwares/wls.rsp
+        -invPtrLoc /oracle/Softwares/oraInst.loc
+      when: ansible_os_family == "AIX"
+
+    - name: Installing weblogic on Linux Server
+      shell: >
+        /usr/java/jdk1.8.0-x64/bin/java -jar /oracle/Softwares/fmw_14.1.1.0.0_wls.jar
+        -silent
+        -responseFile /oracle/Softwares/wls.rsp
+        -invPtrLoc /oracle/Softwares/oraInst.loc
+      when: ansible_system == "Linux"
