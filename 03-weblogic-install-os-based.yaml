@@ -1,3 +1,4 @@
+# Scenario 1
 - name: Copy binary from 48 to 49 via control node 44
   hosts: all
   remote_user: weblogic
@@ -40,3 +41,56 @@
         -responseFile /oracle/Softwares/wls.rsp
         -invPtrLoc /oracle/Softwares/oraInst.loc
       when: ansible_system == "Linux"
+---
+# Scenario 2
+- name: Copy WebLogic binaries from source and install on AIX & Linux
+  hosts: all
+  remote_user: weblogic
+
+  vars:
+    src_software_dir: "/oracle/Softwares"
+    dest_software_dir: "/oracle/Softwares"
+
+    wls_files:
+      - oraInst.loc
+      - wls.rsp
+      - fmw_14.1.1.0.0_wls.jar
+
+    java_bin:
+      AIX: "/usr/java8_64/bin/java"
+      Linux: "/usr/java/jdk1.8.0-x64/bin/java"
+
+  tasks:
+    - name: Fetch WebLogic binaries from source server (aix_server1)
+      fetch:
+        src: "{{ src_software_dir }}/{{ item }}"
+        dest: "/tmp/wls_binaries/"
+        flat: yes
+      loop: "{{ wls_files }}"
+      when: inventory_hostname == "aix_server1"
+      run_once: true
+
+    - name: Ensure destination software directory exists
+      ansible.builtin.file:
+        path: "{{ dest_software_dir }}"
+        state: directory
+        owner: weblogic
+        group: weblogic
+        mode: "0755"
+
+    - name: Copy WebLogic binaries to destination servers
+      copy:
+        src: "/tmp/wls_binaries/{{ item }}"
+        dest: "{{ dest_software_dir }}/{{ item }}"
+        owner: weblogic
+        group: weblogic
+        mode: "0755"
+      loop: "{{ wls_files }}"
+
+    - name: Install WebLogic in silent mode (AIX & Linux)
+      ansible.builtin.shell: >
+        {{ java_bin[ansible_system] }} -jar {{ dest_software_dir }}/fmw_14.1.1.0.0_wls.jar
+        -silent -responseFile {{ dest_software_dir }}/wls.rsp -invPtrLoc {{ dest_software_dir }}/oraInst.loc
+      args:
+        chdir: "{{ dest_software_dir }}"
+      when: ansible_system in ["AIX", "Linux"]
