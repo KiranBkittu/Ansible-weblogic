@@ -1,0 +1,157 @@
+# SCENARIO 1
+- name: Create a new directory on the remote server and unzipping binary to new folder
+  hosts: all
+  remote_user: weblogic
+
+  vars:
+    patch_version_path: "/oracle/TEST/Middleware/CPUAPR_2025_14C/WLS_SPB_14.1.1.0.240405/tools/opatch/generic"
+    oracle_home: "/oracle/TEST/Middleware/Oracle_Home"
+    patch_location: "/oracle/TEST/Middleware"
+    binary_patches_path: "/oracle/TEST/Middleware/CPUAPR_2025_14C/WLS_SPB_14.1.1.0.240405/binary_patches"
+    patch_list_aix: "/oracle/TEST/Middleware/CPUAPR_2025_14C/WLS_SPB_14.1.1.0.240405/binary_patches/aix64_patchlist.txt"
+    patch_list_linux: "/oracle/TEST/Middleware/CPUAPR_2025_14C/WLS_SPB_14.1.1.0.240405/binary_patches/linux64_patchlist.txt"
+    java_home_aix: "/usr/java8_64/bin"
+    java_home_linux: "/usr/java/jdk1.8.0-x64/bin"
+
+  tasks:
+    - name: Create new directory to copy the patch
+      ansible.builtin.file:
+        path: "{{ patch_location }}/CPUAPR_2025_14C"
+        state: directory
+        owner: weblogic
+        group: weblogic
+        mode: "0755"
+
+    - name: Fetching the binary from server 48
+      fetch:
+        src: /oracle/Middleware/CPUAPR_2025_14C/p36485734_141100_Generic.zip
+        dest: /tmp
+        flat: yes
+      when: inventory_hostname == "aix_server1"   # Fetching from the server
+
+    - name: Copying the binary to the server
+      copy:
+        src: /tmp/p36485734_141100_Generic.zip
+        dest: /oracle/TEST/Middleware/CPUAPR_2025_14C
+        mode: "0755"
+
+    - name: unzipping the patch binary for aix
+      ansible.builtin.shell: >
+        {{ java_home_aix }}/jar -xvf
+        {{ patch_location }}/CPUAPR_2025_14C/p36485734_141100_Generic.zip
+      args:
+        chdir: "{{ patch_location }}/CPUAPR_2025_14C"
+      when: ansible_system == "AIX"
+
+    - name: unzipping the patch binary linux
+      ansible.builtin.shell: >
+        {{ java_home_linux }}/jar -xvf
+        {{ patch_location }}/CPUAPR_2025_14C/p36485734_141100_Generic.zip
+      args:
+        chdir: "{{ patch_location }}/CPUAPR_2025_14C"
+      when: ansible_system == "Linux"
+
+    - name: unzipping the patch version like 6880880 for aix
+      ansible.builtin.shell: >
+        {{ java_home_aix }}/jar -xvf
+        {{ patch_version_path }}/p28186730_1394215_Generic.zip
+      args:
+        chdir: "{{ patch_version_path }}"
+      when: ansible_system == "AIX"
+
+    - name: unzipping the patch version like 6880880 for linux
+      ansible.builtin.shell: >
+        {{ java_home_linux }}/jar -xvf
+        {{ patch_version_path }}/p28186730_1394215_Generic.zip
+      args:
+        chdir: "{{ patch_version_path }}"
+      when: ansible_system == "Linux"
+
+    - name: Applying patch version to the server for aix
+      ansible.builtin.shell: >
+        {{ java_home_aix }}/java -jar {{ patch_version_path }}/6880880/opatch_generic.jar
+        oracle_home={{ oracle_home }} -silent
+      when: ansible_system == "AIX"
+
+    - name: Applying patch version to the server for linux
+      ansible.builtin.shell: >
+        {{ java_home_linux }}/java -jar {{ patch_version_path }}/6880880/opatch_generic.jar
+        oracle_home={{ oracle_home }} -silent
+      when: ansible_system == "Linux"
+
+    - name: Applying Weblogic 14C patch for AIX
+      ansible.builtin.shell: |
+        {{ oracle_home }}/OPatch/opatch napply -oh {{ oracle_home }} -phBaseFile {{ patch_list_aix }} -silent
+      args:
+        chdir: "{{ binary_patches_path }}"
+      when: ansible_system == "AIX"
+
+    - name: Applying Weblogic 14C patch for Linux
+      ansible.builtin.shell: |
+        {{ oracle_home }}/OPatch/opatch napply -oh {{ oracle_home }} -phBaseFile {{ patch_list_linux }} -silent
+      args:
+        chdir: "{{ binary_patches_path }}"
+      when: ansible_system == "Linux"
+---
+# SCENARIO 2
+- name: Create a new directory on the remote server and apply WebLogic 14C patches
+  hosts: all
+  remote_user: weblogic
+
+  vars:
+    patch_version_path: "/oracle/TEST/Middleware/CPUAPR_2025_14C/WLS_SPB_14.1.1.0.240405/tools/opatch/generic"
+    oracle_home: "/oracle/TEST/Middleware/Oracle_Home"
+    patch_location: "/oracle/TEST/Middleware"
+    binary_patches_path: "/oracle/TEST/Middleware/CPUAPR_2025_14C/WLS_SPB_14.1.1.0.240405/binary_patches"
+
+    patch_list:
+      AIX: "/oracle/TEST/Middleware/CPUAPR_2025_14C/WLS_SPB_14.1.1.0.240405/binary_patches/aix64_patchlist.txt"
+      Linux: "/oracle/TEST/Middleware/CPUAPR_2025_14C/WLS_SPB_14.1.1.0.240405/binary_patches/linux64_patchlist.txt"
+
+    java_bin:
+      AIX: "/usr/java8_64/bin"
+      Linux: "/usr/java/jdk1.8.0-x64/bin"
+
+  tasks:
+    - name: Create patch directory
+      ansible.builtin.file:
+        path: "{{ patch_location }}/CPUAPR_2025_14C"
+        state: directory
+        owner: weblogic
+        group: weblogic
+        mode: "0755"
+
+    - name: Fetching patch binary from source server
+      fetch:
+        src: /oracle/Middleware/CPUAPR_2025_14C/p36485734_141100_Generic.zip
+        dest: /tmp
+        flat: yes
+      when: inventory_hostname == "aix_server1"
+
+    - name: Copy patch binary to target server
+      copy:
+        src: /tmp/p36485734_141100_Generic.zip
+        dest: "{{ patch_location }}/CPUAPR_2025_14C"
+        mode: "0755"
+
+    - name: Unzip patch binary
+      ansible.builtin.shell: >
+        {{ java_bin[ansible_system] }}/jar -xvf {{ patch_location }}/CPUAPR_2025_14C/p36485734_141100_Generic.zip
+      args:
+        chdir: "{{ patch_location }}/CPUAPR_2025_14C"
+
+    - name: Unzip OPatch version (6880880)
+      ansible.builtin.shell: >
+        {{ java_bin[ansible_system] }}/jar -xvf {{ patch_version_path }}/p28186730_1394215_Generic.zip
+      args:
+        chdir: "{{ patch_version_path }}"
+
+    - name: Apply OPatch version
+      ansible.builtin.shell: >
+        {{ java_bin[ansible_system] }}/java -jar {{ patch_version_path }}/6880880/opatch_generic.jar oracle_home={{ oracle_home }} -silent
+
+    - name: Applying WebLogic 14C patching
+      ansible.builtin.shell: |
+        {{ oracle_home }}/OPatch/opatch napply -oh {{ oracle_home }} -phBaseFile {{ patch_list[ansible_system] }} -silent
+      args:
+        chdir: "{{ binary_patches_path }}"
